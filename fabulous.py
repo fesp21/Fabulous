@@ -1,19 +1,23 @@
 from fabric.api import *
 from fabric.colors import green as _green, yellow as _yellow
 from fabric.exceptions import NetworkError
-from .fabulous_conf import fabconf
-from .cookbook import recipe
+from fabulous_conf import fabconf
+from cookbook import recipe
 import boto
 import time
+import os
 
 
-fabconf.update(env)
+for key, value in env.items():
+    if isinstance(fabconf.get(key), list):
+        value = [val.strip() for val in value.split(',')]
+    fabconf[key] = value
 env.user = fabconf['SERVER_USERNAME']
-env.key_filename = fabconf['SSH_PRIVATE_KEY_PATH']
+env.key_filename = fabconf.get('SSH_PRIVATE_KEY_PATH', os.path.join(fabconf['SSH_PATH'], fabconf['EC2_KEY_NAME']))
 
 
 def ulous(giturl=None, environ_file=None):
-    """ec2_key = 'AKIAJCR7D5FNQO5RVY5Q'
+    """
     *** This is what you run the first time ***
     """
     if giturl:
