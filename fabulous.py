@@ -1,19 +1,25 @@
 from fabric.api import *
 from fabric.colors import green as _green, yellow as _yellow
-from fabulous_conf import *
-from cookbook import recipe
+from fabric.exceptions import NetworkError
+from .fabulous_conf import fabconf
+from .cookbook import recipe
 import boto
 import time
 
 
+fabconf.update(env)
 env.user = fabconf['SERVER_USERNAME']
 env.key_filename = fabconf['SSH_PRIVATE_KEY_PATH']
 
 
-def ulous():
-    """
+def ulous(giturl=None, environ_file=None):
+    """ec2_key = 'AKIAJCR7D5FNQO5RVY5Q'
     *** This is what you run the first time ***
     """
+    if giturl:
+        fabconf['GITHUB_REPO'] = giturl
+    if environ_file:
+        pass
     fab()
 
 
@@ -26,6 +32,19 @@ def fab():
     env.host_string = _create_server()
     print(_green("Waiting 30 seconds for server to boot..."))
     time.sleep(30)
+    print(_green("Polling server..."))
+    retries = 6
+    while retries:
+        try:
+            _run('ls')
+        except NetworkError:
+            if retries:
+                retries -= 1
+                time.sleep(5)
+            else:
+                raise
+        else:
+            break
     _oven()
     end_time = time.time()
     print(_green("Runtime: %f minutes" % ((end_time - start_time) / 60)))
@@ -49,15 +68,15 @@ def _create_server():
     Creates EC2 Instance
     """
     print(_yellow("Creating instance"))
-    conn = boto.connect_ec2(ec2_key, ec2_secret)
-    image = conn.get_all_images(ec2_amis)
+    conn = boto.connect_ec2(fabconf['ec2_key'], fabconf['ec2_secret'])
+    image = conn.get_all_images(fabconf['ec2_amis'])
 
-    reservation = image[0].run(1, 1, ec2_keypair, ec2_secgroups,
-        instance_type=ec2_instancetype)
+    reservation = image[0].run(1, 1, fabconf['ec2_keypair'], fabconf['ec2_secgroups'],
+        instance_type=fabconf['ec2_instancetype'])
 
     instance = reservation.instances[0]
     conn.create_tags([instance.id], {"Name":fabconf['INSTANCE_NAME_TAG']})
-    
+
     while instance.state == u'pending':
         print(_yellow("Instance state: %s" % instance.state))
         time.sleep(10)
@@ -65,7 +84,7 @@ def _create_server():
 
     print(_green("Instance state: %s" % instance.state))
     print(_green("Public dns: %s" % instance.public_dns_name))
-    
+
     return instance.public_dns_name
 
 
@@ -92,6 +111,14 @@ def _pip(params):
     """
     for pkg in params:
         _sudo("pip install %s" % pkg)
+
+
+def _gem(params):
+    """
+    Runs gem install commands
+    """
+    for pkg in params:
+        _sudo("gem install %s" % pkg)
 
 
 def _run(params):
