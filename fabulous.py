@@ -8,10 +8,6 @@ import time
 import os
 
 
-for key, value in env.items():
-    if isinstance(fabconf.get(key), list):
-        value = [val.strip() for val in value.split(',')]
-    fabconf[key] = value
 env.user = fabconf['SERVER_USERNAME']
 env.key_filename = fabconf.get('SSH_PRIVATE_KEY_PATH', os.path.join(fabconf['SSH_PATH'], fabconf['EC2_KEY_NAME']))
 
@@ -23,7 +19,10 @@ def ulous(giturl=None, environ_file=None):
     if giturl:
         fabconf['GITHUB_REPO'] = giturl
     if environ_file:
-        pass
+        fabconf['ENVIRON_FILE'] = environ_file
+    fabconf.setdefault('ENVIRON_PAYLOAD', '')
+    if fabconf.get('ENVIRON_FILE'):
+        fabconf['ENVIRON_PAYLOAD'] += '\n'+open(fabconf['ENVIRON_FILE'], 'r').read()
     fab()
 
 
@@ -38,12 +37,12 @@ def fab():
     time.sleep(30)
     print(_green("Polling server..."))
     retries = 6
-    while retries:
+    while retries > 0:
+        retries -= 1
         try:
             _run('ls')
         except NetworkError:
             if retries:
-                retries -= 1
                 time.sleep(5)
             else:
                 raise
@@ -98,47 +97,59 @@ def _virtualenv(params):
     with an active virtualenv
     """
     with cd(fabconf['APPS_DIR']):
-        _virtualenv_command(_render(params))
+        _virtualenv_command(params)
 
 
-def _apt(params):
+def _apt(params, attempts=2):
     """
     Runs apt-get install commands
     """
     for pkg in params:
-        _sudo("apt-get install -qq %s" % pkg)
+        _sudo("apt-get install -qq %s" % pkg, attempts)
 
 
-def _pip(params):
+def _pip(params, attempts=2):
     """
     Runs pip install commands
     """
     for pkg in params:
-        _sudo("pip install %s" % pkg)
+        _sudo("pip install %s" % pkg, attempts)
 
 
-def _gem(params):
+def _gem(params, attempts=2):
     """
     Runs gem install commands
     """
     for pkg in params:
-        _sudo("gem install %s" % pkg)
+        _sudo("gem install %s" % pkg, attempts)
 
 
-def _run(params):
+def _run(params, attempts=1):
     """
     Runs command with active user
     """
     command = _render(params)
-    run(command)
+    while attempts > 0:
+        attempts -= 1
+        try:
+            run(command)
+        except:
+            if attempts < 1:
+                raise
 
 
-def _sudo(params):
+def _sudo(params, attempts=1):
     """
     Run command as root
     """
     command = _render(params)
-    sudo(command)
+    while attempts > 0:
+        attempts -= 1
+        try:
+            sudo(command)
+        except:
+            if attempts < 1:
+                raise
 
 
 def _put(params):
@@ -179,9 +190,22 @@ def _append_to(string, path):
     return "echo '" + string + "' >> " + path
 
 
-def _virtualenv_command(command):
+def _virtualenv_command(params, attempts=1):
     """
     Activates virtualenv and runs command
     """
+    command = _render(params)
     with cd(fabconf['APPS_DIR']):
-        sudo(fabconf['ACTIVATE'] + ' && ' + command, user=fabconf['SERVER_USERNAME'])
+        while attempts > 0:
+            attempts -= 1
+            try:
+                sudo(fabconf['ACTIVATE'] + ' && ' + command, user=fabconf['SERVER_USERNAME'])
+            except:
+                if attempts < 1:
+                    raise
+
+
+def _write_env(params):
+    payload = fabconf['ENVIRON_PAYLOAD'] + '\n' + _render(params)
+    path = _render('/home/%(SERVER_USERNAME)s/%(PROJECT_NAME)s.env')
+    run(_write_to(payload, path))

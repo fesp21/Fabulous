@@ -1,5 +1,6 @@
 import os.path
 from os.path import expanduser
+from fabric.api import env
 
 fabconf = {}
 
@@ -18,17 +19,8 @@ fabconf['EC2_KEY_NAME'] = "key.pem"
 # Project name: polls
 fabconf['PROJECT_NAME'] = "polls"
 
-# Where to install apps
-fabconf['APPS_DIR'] = "/home/%s/webapps" % fabconf['SERVER_USERNAME']
-
-# Where you want your project installed: /APPS_DIR/PROJECT_NAME
-fabconf['PROJECT_PATH'] = "%s/%s" % (fabconf['APPS_DIR'], fabconf['PROJECT_NAME'])
-
 # App domains
 fabconf['DOMAINS'] = "example.com www.example.com"
-
-# Path for virtualenvs
-fabconf['VIRTUALENV_DIR'] = "/home/%s/.virtualenvs" % fabconf['SERVER_USERNAME']
 
 # Email for the server admin
 fabconf['ADMIN_EMAIL'] = "webmaster@localhost"
@@ -39,14 +31,9 @@ fabconf['GIT_USERNAME'] = "Server"
 # Name of the private key file used for github deployments
 fabconf['GITHUB_DEPLOY_KEY_NAME'] = "github"
 
-# Don't edit. Local path for deployment key you use for github
-fabconf['GITHUB_DEPLOY_KEY_PATH'] = "%s/%s" % (fabconf['SSH_PATH'], fabconf['GITHUB_DEPLOY_KEY_NAME'])
 
 # Path to the repo of the application you want to install
 fabconf['GITHUB_REPO'] = "https://github.com/gcollazo/Blank-django-Project.git"
-
-# Virtualenv activate command
-fabconf['ACTIVATE'] = "source /home/%s/.virtualenvs/%s/bin/activate" % (fabconf['SERVER_USERNAME'], fabconf['PROJECT_NAME'])
 
 # Name tag for your server instance on EC2
 fabconf['INSTANCE_NAME_TAG'] = "AppServer"
@@ -68,3 +55,28 @@ fabconf['ec2_secgroups'] = []
 
 # API Name of instance type. http://bit.ly/mkWvpn
 fabconf['ec2_instancetype'] = 't1.micro'
+
+
+fabconf['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+
+for key, value in env.items():
+    if isinstance(fabconf.get(key), list):
+        value = [val.strip() for val in value.split(',')]
+    fabconf[key] = value
+
+
+# Where to install apps
+fabconf.setdefault('APPS_DIR', "/home/%s/webapps" % fabconf['SERVER_USERNAME'])
+
+# Path for virtualenvs
+fabconf.setdefault('VIRTUALENV_DIR', fabconf['APPS_DIR'])
+
+# Where you want your project installed: /APPS_DIR/PROJECT_NAME
+fabconf.setdefault('PROJECT_PATH', "%s/%s" % (fabconf['APPS_DIR'], fabconf['PROJECT_NAME']))
+
+# Virtualenv activate command
+fabconf.setdefault('ACTIVATE', "source %s/bin/activate" % (fabconf['PROJECT_PATH']))
+
+# Don't edit. Local path for deployment key you use for github
+fabconf.setdefault('GITHUB_DEPLOY_KEY_PATH', "%s/%s" % (fabconf['SSH_PATH'], fabconf['GITHUB_DEPLOY_KEY_NAME']))

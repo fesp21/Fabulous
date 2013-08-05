@@ -15,11 +15,11 @@ recipe = [
   {"action":"apt",
     "params":["mysql-client", "libmysqlclient-dev", "nginx", "memcached", "git",
       "python-setuptools", "python-dev", "build-essential", "python-pip", "python-mysqldb",
-      "ruby", "supervisor"],
+      "ruby", "supervisor", "libpq-dev", "libevent-dev", "libmemcached-dev"],
     "message":"Installing apt-get packages"},
 
   # List of pypi packages to install
-  {"action":"pip", "params":["virtualenv", "virtualenvwrapper"],
+  {"action":"pip", "params":["virtualenv"],
     "message":"Installing pip packages"},
 
   # List of ruby packages to install
@@ -41,13 +41,6 @@ recipe = [
   {"action":"sudo", "params":"chown root:root /etc/nginx/sites-available/%(PROJECT_NAME)s"},
   {"action":"sudo", "params":"/etc/init.d/nginx restart", "message":"Restarting nginx"},
 
-  # virtualenvwrapper
-  {"action":"sudo", "params":"mkdir %(VIRTUALENV_DIR)s", "message":"Configuring virtualenvwrapper"},
-  {"action":"sudo", "params":"chown -R %(SERVER_USERNAME)s: %(VIRTUALENV_DIR)s"},
-  {"action":"run", "params":"echo 'export WORKON_HOME=%(VIRTUALENV_DIR)s' >> /home/%(SERVER_USERNAME)s/.profile"},
-  {"action":"run", "params":"echo 'source /usr/local/bin/virtualenvwrapper.sh' >> /home/%(SERVER_USERNAME)s/.profile"},
-  {"action":"run", "params":"source /home/%(SERVER_USERNAME)s/.profile"},
-
   # webapps alias
   {"action":"run", "params":"""echo "alias webapps='cd %(APPS_DIR)s'" >> /home/%(SERVER_USERNAME)s/.profile""",
     "message":"Creating webapps alias"},
@@ -67,21 +60,28 @@ recipe = [
   {"action":"run", "params":"ssh-keyscan github.com >> /home/%(SERVER_USERNAME)s/.ssh/known_hosts"},
 
   # Download project code
-  {"action":"run", "params":"git clone %(GITHUB_REPO)s %(PROJECT_NAME)s",
+  {"action":"run", "params":"git clone %(GITHUB_REPO)s %(PROJECT_PATH)s",
     "message":"Checking out project"},
 
   # hacks
   {"action":"sudo", "params":"ln -s /usr/bin/python /usr/local/bin/python"},
-  {"action":"run", "params":"rm -f %(PROJECT_NAME)s/runtime.txt"},
+  {"action":"sudo", "params":"mkdir -p /var/log/%(PROJECT_NAME)s"},
+  {"action":"sudo", "params":"chown %(SERVER_USERNAME)s /var/log/%(PROJECT_NAME)s"},
 
   # Run Mason
-  {"action":"run", "params":"mason buildpacks:install https://github.com/heroku/heroku-buildpack-python.git#v24",
-    "message":"Installing python buildpacks"},
-  {"action":"run", "params":"mason build %(PROJECT_NAME)s -t dir -o %(VIRTUALENV_DIR)s/%(PROJECT_NAME)s",
-    "message":"Building application"},
+  #TODO make buildpack configurable
+  #{"action":"run", "params":"mason buildpacks:install https://github.com/zbyte64/heroku-buildpack-python.git",
+  #  "message":"Installing python buildpacks"},
+  #{"action":"run", "params":"mason build /home/%(SERVER_USERNAME)s/%(PROJECT_NAME)s -t dir -o %(VIRTUALENV_DIR)s/%(PROJECT_NAME)s",
+  #  "message":"Building application"},
+  {"action":"run", "params":"virtualenv %(PROJECT_PATH)s",
+      "message":"Creating virtualenv"},
+  {"action":"virtualenv_command", "params":"pip install -r %(PROJECT_PATH)s/requirements.txt",
+      "message":"Installing requirements", "attempts":2},
 
   # Foreman
-  {"action":"run", "params":"foreman export -u ubuntu -a %(PROJECT_NAME)s -f %(VIRTUALENV_DIR)s/%(PROJECT_NAME)s/Procfile supervisord /home/%(SERVER_USERNAME)s",
+  {"action": "write_env", "params":'PATH="%(PROJECT_PATH)s/bin:%(PATH)s"\nVIRTUAL_ENV="%(PROJECT_PATH)s"'},
+  {"action":"run", "params":"foreman export -u ubuntu -a %(PROJECT_NAME)s -f %(PROJECT_PATH)s/Procfile -e /home/%(SERVER_USERNAME)s/%(PROJECT_NAME)s.env -p 8000 supervisord /home/%(SERVER_USERNAME)s",
     "message":"Configuring app supervisor"},
   #/home/%(SERVER_USERNAME)s/%(PROJECT_NAME)s.conf
 
